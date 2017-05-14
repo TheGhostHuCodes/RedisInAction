@@ -11,7 +11,7 @@ def post_article(conn: redis.StrictRedis, user: int, title: str,
                  link: str) -> str:
     article_id = str(conn.incr('article:'))
 
-    voted = 'voted:' + article_id
+    voted = 'up_voted:' + article_id
     conn.sadd(voted, user)
     conn.expire(voted, ONE_WEEK_IN_SECONDS)
 
@@ -48,15 +48,31 @@ def get_articles(conn: redis.StrictRedis, page: int,
     return articles
 
 
-def article_vote(conn: redis.StrictRedis, user: int, article: str) -> None:
+def article_vote(conn: redis.StrictRedis,
+                 user: int,
+                 article: str,
+                 direction: str='up') -> None:
     cutoff = time.time() - ONE_WEEK_IN_SECONDS
     if conn.zscore('time:', article) < cutoff:
         return
 
     article_id = article.partition(':')[-1]
-    if conn.sadd('voted:' + article_id, user):
-        conn.zincrby('score:', article, VOTE_SCORE)
-        conn.hincrby(article, 'votes', 1)
+    if direction == 'up':
+        if conn.smove('down_voted:' + article_id, 'up_voted:' + article_id,
+                      user):
+            conn.zincrby('score:', article, 2 * VOTE_SCORE)
+            conn.hincrby(article, 'votes', 2)
+        elif conn.sadd('up_voted:' + article_id, user):
+            conn.zincrby('score:', article, VOTE_SCORE)
+            conn.hincrby(article, 'votes', 1)
+    if direction == 'down':
+        if conn.smove('up_voted:' + article_id, 'down_voted:' + article_id,
+                      user):
+            conn.zincrby('score:', article, -2 * VOTE_SCORE)
+            conn.hincrby(article, 'votes', -2)
+        elif conn.sadd('down_voted:' + article_id, user):
+            conn.zincrby('score:', article, -VOTE_SCORE)
+            conn.hincrby(article, 'votes', -1)
 
 
 def add_remove_groups(conn: redis.StrictRedis,

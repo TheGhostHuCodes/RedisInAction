@@ -105,3 +105,38 @@ def test_article_can_be_added_and_removed_from_a_single_group(
     add_remove_groups(conn, article_id, to_remove=['test_group'])
     article_ids_in_test_group = conn.smembers('group:test_group')
     assert len(article_ids_in_test_group) == 0
+
+
+def test_vote_down_article_decreases_vote_count(conn: redis.StrictRedis):
+    article_id = post_article(conn, 1, 'test title', 'test link')
+    article = 'article:' + article_id
+    article_vote(conn, 2, article, direction='down')
+    result = conn.hget(article, 'votes')
+    assert int(result) == 0
+
+
+def test_same_user_can_only_vote_down_article_once(conn: redis.StrictRedis):
+    article_id = post_article(conn, 1, 'test title', 'test link')
+    article = 'article:' + article_id
+    article_vote(conn, 2, article, direction='down')
+    article_vote(conn, 2, article, direction='down')
+    result = conn.hget(article, 'votes')
+    assert int(result) == 0
+
+
+def test_same_user_can_vote_down_then_up(conn: redis.StrictRedis):
+    article_id = post_article(conn, 1, 'test title', 'test link')
+    article = 'article:' + article_id
+    article_vote(conn, 2, article, direction='down')
+    article_vote(conn, 2, article, direction='up')
+    result = conn.hget(article, 'votes')
+    assert int(result) == 2
+
+
+def test_same_user_can_vote_up_then_down(conn: redis.StrictRedis):
+    article_id = post_article(conn, 1, 'test title', 'test link')
+    article = 'article:' + article_id
+    article_vote(conn, 2, article, direction='up')
+    article_vote(conn, 2, article, direction='down')
+    result = conn.hget(article, 'votes')
+    assert int(result) == 0
