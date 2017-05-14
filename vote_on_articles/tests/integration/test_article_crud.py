@@ -5,7 +5,9 @@ import pytest
 from _pytest.fixtures import FixtureRequest
 import redis
 
-from vote_on_articles.article_crud import article_vote, get_articles, ONE_WEEK_IN_SECONDS, post_article
+from vote_on_articles.article_crud import (add_remove_groups, article_vote,
+                                           get_articles, get_group_articles,
+                                           ONE_WEEK_IN_SECONDS, post_article)
 
 
 @pytest.fixture(scope='function', name='conn')
@@ -81,3 +83,25 @@ def test_get_articles_gets_articles_with_many_votes_before_articles_with_one_vot
         b'test title 2', b'test title 4', b'test title 3', b'test title 1',
         b'test title 0'
     ] == titles
+
+
+def test_article_can_be_added_to_a_single_group(conn: redis.StrictRedis):
+    article_id = post_article(conn, 1, 'test title', 'test link')
+    add_remove_groups(conn, article_id, ['test_group'])
+    test_group_articles = get_group_articles(conn, 'test_group', 1)
+    assert len(test_group_articles) == 1
+
+
+def test_article_can_be_added_and_removed_from_a_single_group(
+        conn: redis.StrictRedis):
+    article_id = post_article(conn, 1, 'test title', 'test link')
+
+    add_remove_groups(conn, article_id, to_add=['test_group'])
+    test_group_articles = get_group_articles(conn, 'test_group', 1)
+    assert len(test_group_articles) == 1
+
+    # The intersection ZSET score:test_group is cached for 60 seconds. Let's
+    # look at the SET membership instead.
+    add_remove_groups(conn, article_id, to_remove=['test_group'])
+    article_ids_in_test_group = conn.smembers('group:test_group')
+    assert len(article_ids_in_test_group) == 0

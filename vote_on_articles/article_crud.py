@@ -1,5 +1,5 @@
 import time
-from typing import List
+from typing import List, Optional
 
 import redis
 
@@ -57,3 +57,27 @@ def article_vote(conn: redis.StrictRedis, user: int, article: str) -> None:
     if conn.sadd('voted:' + article_id, user):
         conn.zincrby('score:', article, VOTE_SCORE)
         conn.hincrby(article, 'votes', 1)
+
+
+def add_remove_groups(conn: redis.StrictRedis,
+                      article_id: str,
+                      to_add: Optional[List[str]]=None,
+                      to_remove: Optional[List[str]]=None) -> None:
+    article = 'article:' + article_id
+    _to_add = to_add if to_add else []
+    _to_remove = to_remove if to_remove else []
+    for group in _to_add:
+        conn.sadd('group:' + group, article)
+    for group in _to_remove:
+        conn.srem('group:' + group, article)
+
+
+def get_group_articles(conn: redis.StrictRedis,
+                       group: str,
+                       page: int,
+                       order: str='score:') -> List[dict]:
+    key = order + group
+    if not conn.exists(key):
+        conn.zinterstore(key, ['group:' + group, order], aggregate='max')
+        conn.expire(key, 60)
+    return get_articles(conn, page, key)
