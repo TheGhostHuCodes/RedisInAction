@@ -2,19 +2,14 @@ import time
 import unittest.mock as mock
 
 import pytest
-from _pytest.fixtures import FixtureRequest
 import redis
 
 from vote_on_articles.article_crud import (add_remove_groups, article_vote,
                                            get_articles, get_group_articles,
                                            ONE_WEEK_IN_SECONDS, post_article)
+from tests.utils import redis_conn
 
-
-@pytest.fixture(scope='function', name='conn')
-def redis_conn(request: FixtureRequest) -> redis.StrictRedis:
-    conn = redis.Redis()
-    request.addfinalizer(conn.flushall)
-    return conn
+pytest.fixture(scope='function', name='conn')(redis_conn)
 
 
 def add_articles(conn: redis.StrictRedis, n: int, user: int=1):
