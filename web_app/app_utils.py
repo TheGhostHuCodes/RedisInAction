@@ -1,24 +1,27 @@
 import time
 from typing import List
+import uuid
 
 import redis
 
 SESSION_NUMBER_LIMIT = 10000000
 
 
-def check_token(conn: redis.StrictRedis, token: str) -> bytes:
-    return conn.hget('login:', token)
+def check_session(conn: redis.StrictRedis, session: uuid.UUID) -> bytes:
+    return conn.hget('login:', str(session))
 
 
-def update_token(conn: redis.StrictRedis, token: str, user: int,
-                 item=None) -> None:
+def update_session(conn: redis.StrictRedis,
+                   session: uuid.UUID,
+                   user: int,
+                   item=None) -> None:
     timestamp = time.time()
-    conn.hset('login:', token, user)
-    conn.zadd('recent:', token, timestamp)
+    conn.hset('login:', str(session), user)
+    conn.zadd('recent:', str(session), timestamp)
     if item:
-        conn.zadd('viewed:' + token, item, timestamp)
+        conn.zadd('viewed:' + str(session), item, timestamp)
         # Keep only the last 25 used ordered by timestamp.
-        conn.zremrangebyrank('viewed:' + token, 0, -26)
+        conn.zremrangebyrank('viewed:' + str(session), 0, -26)
 
 
 def clean_sessions(conn: redis.StrictRedis) -> None:
@@ -26,12 +29,12 @@ def clean_sessions(conn: redis.StrictRedis) -> None:
     if size <= SESSION_NUMBER_LIMIT:
         return
     end_index = min(size - SESSION_NUMBER_LIMIT, 100)
-    tokens = conn.zrange('recent:', 0, end_index - 1)  # type: List[bytes]
+    sessions = conn.zrange('recent:', 0, end_index - 1)  # type: List[bytes]
 
     session_keys = []
-    for token in tokens:
-        session_keys.append('viewed:' + token.decode('utf-8'))
+    for session in sessions:
+        session_keys.append('viewed:' + session.decode('utf-8'))
 
     conn.delete(*session_keys)
-    conn.hdel('login:', *tokens)
-    conn.zrem('recent:', *tokens)
+    conn.hdel('login:', *sessions)
+    conn.zrem('recent:', *sessions)
