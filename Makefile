@@ -6,7 +6,7 @@ test:
 	python -m pytest
 
 .coverage: 
-	coverage run --source vote_on_articles -m py.test
+	coverage run --source . -m py.test
 
 coverage: .coverage
 	coverage html --omit="*/test*" 
