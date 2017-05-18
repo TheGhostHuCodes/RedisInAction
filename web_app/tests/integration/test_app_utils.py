@@ -5,7 +5,7 @@ import pytest
 import redis
 
 from tests.utils import redis_conn
-from web_app.app_utils import check_session, update_session, clean_sessions
+from web_app.app_utils import check_session, update_session, clean_sessions, add_to_cart
 
 pytest.fixture(scope='function', name='conn')(redis_conn)
 
@@ -35,3 +35,19 @@ def test_sessions_not_cleaned_when_sessions_below_session_number_limit(
         update_session(conn, uuid.uuid4(), user_id)
     clean_sessions(conn)
     assert conn.hlen('login:') == TEST_SESSION_NUMBER_LIMIT - 1
+
+
+def test_adding_item_to_cart_adds_items(conn: redis.StrictRedis):
+    test_token = uuid.uuid4()
+    update_session(conn, test_token, 42)
+    add_to_cart(conn, test_token, 'Horse', 8)
+    assert conn.hget('cart:' + str(test_token), b'Horse') == b'8'
+
+
+def test_adding_negative_count_ofitem_to_cart_removes_item(
+        conn: redis.StrictRedis):
+    test_token = uuid.uuid4()
+    update_session(conn, test_token, 42)
+    add_to_cart(conn, test_token, 'Horse', 8)
+    add_to_cart(conn, test_token, 'Horse', -1)
+    assert conn.hget('cart:' + str(test_token), b'Horse') is None

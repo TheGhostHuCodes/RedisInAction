@@ -34,7 +34,18 @@ def clean_sessions(conn: redis.StrictRedis) -> None:
     session_keys = []
     for session in sessions:
         session_keys.append('viewed:' + session.decode('utf-8'))
+        session_keys.append('cart:' + session.decode('utf-8'))
 
     conn.delete(*session_keys)
     conn.hdel('login:', *sessions)
     conn.zrem('recent:', *sessions)
+
+
+def add_to_cart(conn: redis.StrictRedis,
+                session: uuid.UUID,
+                item: str,
+                count: int):
+    if count <= 0:
+        conn.hdel('cart:' + str(session), item)
+    else:
+        conn.hset('cart:' + str(session), item, count)
