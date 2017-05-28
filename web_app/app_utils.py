@@ -1,5 +1,5 @@
 import time
-from typing import List
+from typing import Callable, List
 import uuid
 
 import redis
@@ -49,3 +49,29 @@ def add_to_cart(conn: redis.StrictRedis,
         conn.hdel('cart:' + str(session), item)
     else:
         conn.hset('cart:' + str(session), item, count)
+
+
+def _can_cache(conn: redis.StrictRedis, request: str) -> bool:
+    return True
+
+
+def _hash_request(request: str) -> int:
+    return hash(request)
+
+
+def cache_request(conn: redis.StrictRedis,
+                  request: str,
+                  callback: Callable[[
+                      str,
+                  ], str]) -> str:
+    if not _can_cache(conn, request):
+        return callback(request)
+
+    page_key = 'cache:' + str(_hash_request(request))
+    content = conn.get(page_key)
+
+    if not content:
+        content = callback(request)
+        conn.setex(page_key, content, 300)
+
+    return content
