@@ -44,7 +44,7 @@ def clean_sessions(conn: redis.StrictRedis) -> None:
 def add_to_cart(conn: redis.StrictRedis,
                 session: uuid.UUID,
                 item: str,
-                count: int):
+                count: int) -> None:
     if count <= 0:
         conn.hdel('cart:' + str(session), item)
     else:
