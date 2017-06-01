@@ -1,7 +1,9 @@
+import json
 import time
 from typing import Callable, List
 import uuid
 
+import collections
 import redis
 
 SESSION_NUMBER_LIMIT = 10000000
@@ -75,3 +77,38 @@ def cache_request(conn: redis.StrictRedis,
         conn.setex(page_key, content, 300)
 
     return content
+
+
+def schedule_row_cache(conn: redis.StrictRedis, row_id: str,
+                       delay: float) -> None:
+    conn.zadd('delay:', row_id, delay)
+    conn.zadd('schedule:', row_id, time.time())
+
+
+Item = collections.namedtuple('Item', ['name', 'quantity', 'description'])
+
+
+def get_inventory(row_id: str) -> Item:
+    return Item(
+        name='my_item',
+        quantity=42,
+        description='The answer to life, the universe and everything.')
+
+
+def cache_next_row(conn: redis.StrictRedis) -> None:
+    next_row = conn.zrange('schedule:', 0, 0, withscores=True)
+    now = time.time()
+    if not next_row or next_row[0][1] > now:
+        return
+    row_id = next_row[0][0].decode('utf-8')
+
+    delay = conn.zscore('delay:', row_id)
+    if delay <= 0:
+        conn.zrem('delay:', row_id)
+        conn.zrem('schedule:', row_id)
+        conn.delete('inv:', row_id)
+        return
+
+    row = get_inventory(row_id)
+    conn.zadd('schedule:', row_id, now + delay)
+    conn.set('inv:' + row_id, json.dumps(row._asdict()))

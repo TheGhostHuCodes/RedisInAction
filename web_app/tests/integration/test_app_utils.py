@@ -6,7 +6,8 @@ import redis
 
 from tests.utils import redis_conn
 from web_app.app_utils import (check_session, update_session, clean_sessions,
-                               add_to_cart, cache_request)
+                               add_to_cart, cache_request, schedule_row_cache,
+                               cache_next_row)
 
 pytest.fixture(scope='function', name='conn')(redis_conn)
 
@@ -59,3 +60,15 @@ def test_cache_request_caches_echo_request(conn: redis.StrictRedis):
     cache_request(conn, my_request, lambda x: x)
     assert conn.get('cache:' + str(hash(my_request))) == my_request.encode(
         'utf-8')
+
+
+def test_schedule_row_to_cache(conn: redis.StrictRedis):
+    row_id = "my_row_id"
+    schedule_row_cache(conn, row_id, 10)
+    assert conn.zscore('delay:', row_id) == 10
+
+
+def test_cache_next_row_caches_row(conn: redis.StrictRedis):
+    row_id = "my_row_id"
+    schedule_row_cache(conn, row_id, 1)
+    cache_next_row(conn)
