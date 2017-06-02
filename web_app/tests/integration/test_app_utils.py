@@ -46,7 +46,7 @@ def test_adding_item_to_cart_adds_items(conn: redis.StrictRedis):
     assert conn.hget('cart:' + str(test_token), b'Horse') == b'8'
 
 
-def test_adding_negative_count_ofitem_to_cart_removes_item(
+def test_adding_negative_count_of_item_to_cart_removes_item(
         conn: redis.StrictRedis):
     test_token = uuid.uuid4()
     update_session(conn, test_token, 42)
