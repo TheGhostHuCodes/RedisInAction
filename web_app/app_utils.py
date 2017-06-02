@@ -1,12 +1,14 @@
 import json
 import time
-from typing import Callable, List
+from typing import Callable, List, Optional
 import uuid
 
 import collections
 import redis
 
 SESSION_NUMBER_LIMIT = 10000000
+
+Item = collections.namedtuple('Item', ['name', 'quantity', 'description'])
 
 
 def check_session(conn: redis.StrictRedis, session: uuid.UUID) -> bytes:
@@ -16,7 +18,7 @@ def check_session(conn: redis.StrictRedis, session: uuid.UUID) -> bytes:
 def update_session(conn: redis.StrictRedis,
                    session: uuid.UUID,
                    user: int,
-                   item=None) -> None:
+                   item: Optional[Item]=None) -> None:
     timestamp = time.time()
     conn.hset('login:', str(session), user)
     conn.zadd('recent:', str(session), timestamp)
@@ -24,6 +26,7 @@ def update_session(conn: redis.StrictRedis,
         conn.zadd('viewed:' + str(session), item, timestamp)
         # Keep only the last 25 used ordered by timestamp.
         conn.zremrangebyrank('viewed:' + str(session), 0, -26)
+        conn.zincrby('viewed:', item, -1)
 
 
 def clean_sessions(conn: redis.StrictRedis) -> None:
@@ -54,7 +57,8 @@ def add_to_cart(conn: redis.StrictRedis,
 
 
 def _can_cache(conn: redis.StrictRedis, request: str) -> bool:
-    return True
+    rank = conn.zrank('viewed:', request)
+    return rank is not None and rank < 10000
 
 
 def _hash_request(request: str) -> int:
@@ -85,9 +89,6 @@ def schedule_row_cache(conn: redis.StrictRedis, row_id: str,
     conn.zadd('schedule:', row_id, time.time())
 
 
-Item = collections.namedtuple('Item', ['name', 'quantity', 'description'])
-
-
 def get_inventory(row_id: str) -> Item:
     return Item(
         name='my_item',
@@ -112,3 +113,8 @@ def cache_next_row(conn: redis.StrictRedis) -> None:
     row = get_inventory(row_id)
     conn.zadd('schedule:', row_id, now + delay)
     conn.set('inv:' + row_id, json.dumps(row._asdict()))
+
+
+def rescale_viewed(conn: redis.StrictRedis) -> None:
+    conn.zremrangebyrank('viewed:', 20000, -1)
+    conn.zinterstore('viewed:', {'viewed:': 0.5})

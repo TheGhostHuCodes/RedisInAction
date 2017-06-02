@@ -7,7 +7,7 @@ import redis
 from tests.utils import redis_conn
 from web_app.app_utils import (check_session, update_session, clean_sessions,
                                add_to_cart, cache_request, schedule_row_cache,
-                               cache_next_row)
+                               cache_next_row, get_inventory)
 
 pytest.fixture(scope='function', name='conn')(redis_conn)
 
@@ -56,10 +56,12 @@ def test_adding_negative_count_of_item_to_cart_removes_item(
 
 
 def test_cache_request_caches_echo_request(conn: redis.StrictRedis):
-    my_request = "My Request"
-    cache_request(conn, my_request, lambda x: x)
-    assert conn.get('cache:' + str(hash(my_request))) == my_request.encode(
-        'utf-8')
+    my_request = get_inventory('row_id')
+    test_token = uuid.uuid4()
+    update_session(conn, test_token, 42, get_inventory('row_id'))
+    cache_request(conn, get_inventory('row_id'), lambda x: x)
+    assert conn.get('cache:' + str(hash(my_request))) == str(
+        my_request).encode('utf-8')
 
 
 def test_schedule_row_to_cache(conn: redis.StrictRedis):
